@@ -64,7 +64,7 @@ void ADC_init() {
  // unsigned char AdminKey;
  unsigned char reset = 0;
 
-enum LEDState {IR_INIT,IR_READ,IR_WAIT} led_state;
+enum LEDState {IR_INIT,IR_READ/*,IR_WAIT*/} led_state;
 enum INState {IN_INIT,IN_RECEIVE,IN_SELECT1,IN_SELECT2,IN_BLOCK} in_state;
 enum PLState {PL_INIT,PL_UPDATE} pl_state;
 enum TRState {TR_INIT,TR_CHECKUPDATE,TR_TRANSMIT,TR_RESET} tr_state;
@@ -96,22 +96,20 @@ void LEDS_Tick(){
 			break;
 		case IR_READ:
 			irVal = ADC;
-			if (irVal > 150) {
+			sprintf(str, "%d", ADC);
+			LCD_AppendString(1, str);
+			if (irVal > 900) {
 				coinReceived = 0;
-				sprintf(str, "%d", ADC);
-				LCD_AppendString(1, str);
 				/*LCD_AppendString(17, "No coin");*/
 			} else {
 				coinReceived = 1;
-				sprintf(str, "%d", ADC);
-				LCD_AppendString(1, str);
 				/*LCD_AppendString(17, "Coin in");*/
 			}
-			LCD_AppendString(5, "1R");
+			/*LCD_AppendString(5, "1R");*/
 			break;
-		case IR_WAIT:
-			LCD_AppendString(5, "1W");
-			break;
+// 		case IR_WAIT:
+// 			LCD_AppendString(5, "1W");
+// 			break;
 		default:
 			break;
 	}
@@ -121,21 +119,21 @@ void LEDS_Tick(){
 			led_state = IR_READ;
 			break;
 		case IR_READ:
-			if(coinReceived)
-				led_state = IR_WAIT;
-			else
+// 			if(coinReceived)
+// 				led_state = IR_WAIT;
+// 			else
 				led_state = IR_READ;
 			break;
-		case IR_WAIT:
-			if(reset) {
-				coinReceived = 0;
-				led_state = IR_READ;
-				/*LCD_AppendString(5, "1R");*/
-			} else {
-				led_state = IR_WAIT;
-				/*LCD_AppendString(5, "1W");*/
-			}
-			break;
+// 		case IR_WAIT:
+// 			if(reset) {
+// 				coinReceived = 0;
+// 				led_state = IR_READ;
+// 				/*LCD_AppendString(5, "1R");*/
+// 			} else {
+// 				led_state = IR_WAIT;
+// 				/*LCD_AppendString(5, "1W");*/
+// 			}
+// 			break;
 		default:
 			led_state = IR_INIT;
 			break;
@@ -144,30 +142,26 @@ void LEDS_Tick(){
 
 void IN_Tick(){
 	//Local vars
-	static unsigned char inputKey/*,BTinput*/;
+	static unsigned char inputKey,BTinput;
 	//Actions
 	switch(in_state){
 		case IN_INIT:
 			productSelect = 0;
 			inputKey = 0;
-			//BTinput = 0;
+			BTinput = 0;
 			break;
 		case IN_RECEIVE:
-// 			if(USART_HasReceived(0))
-// 				BTinput = USART_Receive(0);
+			if(USART_HasReceived(0))
+				BTinput = USART_Receive(0);
 			inputKey = GetKeypadKey();
-			//LCD_AppendString(8, "2R");
 			break;
 		case IN_SELECT1:
 			productSelect = 1;
-			//LCD_AppendString(8, "2S1");
 			break;
 		case IN_SELECT2:
 			productSelect = 2;
-			//LCD_AppendString(8, "2S2");
 			break;
 		case IN_BLOCK:
-			//LCD_AppendString(8, "2B");
 			break;
 		default:
 			break;
@@ -178,9 +172,9 @@ void IN_Tick(){
 			in_state = IN_RECEIVE;
 			break;
 		case IN_RECEIVE:
-			if (inputKey == '1' /*|| BTinput == '1'*/)
+			if (inputKey == '1' || BTinput == '1')
 				in_state = IN_SELECT1;
-			else if (inputKey == '2' /*|| BTinput == '2'*/)
+			else if (inputKey == '2' || BTinput == '2')
 				in_state = IN_SELECT2;
 			else
 				in_state = IN_RECEIVE;
@@ -195,6 +189,7 @@ void IN_Tick(){
 			if (reset) {
 				in_state = IN_RECEIVE;
 				productSelect = 0;
+				BTinput = 0;
 			} else {
 				in_state = IN_BLOCK;
 			}
@@ -214,8 +209,6 @@ void PL_Tick(){
 		case PL_UPDATE:
 			if (coinReceived) {
 				control |= 0x01; // Set bit 0 high to indicate a coin has been received
-				//LCD_AppendString(17, "Coin in");
-				//coinReceived = 0;
 			} else {
 				control &= 0xFE; // Set bit 0 low to indicate no coin received
 			}
@@ -229,8 +222,6 @@ void PL_Tick(){
 					break;
 				default: control &= 0xF9; break;
 			}
-			//LCD_AppendString(12, "3U");
-			transmit_data(control);
 			break;
 		default:
 			break;
@@ -259,13 +250,10 @@ void TR_Tick(){
 			delayCount = 0;
 			break;
 		case TR_CHECKUPDATE:
-			//LCD_AppendString(17, "4C");
 			break;
 		case TR_TRANSMIT:
-			//LCD_AppendString(17, "4T");
 			break;
 		case TR_RESET:
-			//LCD_AppendString(17, "4R");
 			reset = 1;
 			break;
 		default:
@@ -280,30 +268,28 @@ void TR_Tick(){
 			if (lastSent != control) {
 				tr_state = TR_TRANSMIT;
 				lastSent = control;
-			}
-			else
+			} else {
 				tr_state = TR_CHECKUPDATE;
-				LCD_AppendString(25, "CHCK");
+			}
 			break;
 		case TR_TRANSMIT:
 			if(USART_IsSendReady(1)) {
 				USART_Send(control,1);
 				tr_state = TR_RESET;
-				//LCD_AppendString(17, "Transmitted");
+				transmit_data(control);
 			} else {
 				tr_state = TR_TRANSMIT;
-				LCD_AppendString(25, "TMIT");
 			}
 			break;
 		case TR_RESET:
 			if (delayCount < 10) {
 				tr_state = TR_RESET;
 				delayCount++;
-				LCD_AppendString(25, "RSET");
 			} else {
 				tr_state = TR_CHECKUPDATE;
 				reset = 0;
-				LCD_AppendString(25, "GOOD");
+				delayCount = 0;
+				/*LCD_AppendString(6, "0");*/
 			}
 			break;
 		default:
@@ -318,7 +304,7 @@ void LedSecTask()
 	for(;;) 
 	{ 	
 		LEDS_Tick();
-		vTaskDelay(250); 
+		vTaskDelay(5); 
 	} 
 }
 
@@ -328,7 +314,7 @@ void InputSecTask()
 	for(;;)
 	{
 		IN_Tick();
-		vTaskDelay(250);
+		vTaskDelay(25);
 	}
 }
 
@@ -338,7 +324,7 @@ void ProductLogicSecTask()
 	for(;;)
 	{
 		PL_Tick();
-		vTaskDelay(500);
+		vTaskDelay(50);
 	}
 }
 
@@ -348,7 +334,7 @@ void TransmitSecTask()
 	for(;;)
 	{
 		TR_Tick();
-		vTaskDelay(500);
+		vTaskDelay(50);
 	}
 }
 
@@ -362,13 +348,13 @@ void StartSecPulse(unsigned portBASE_TYPE Priority)
  
 int main(void) 
 { 
-	DDRA = 0x06; PORTA = 0xF8; // ADC input
+	DDRA = 0xC0; PORTA = 0x3F; // ADC input
 	DDRB = 0xFF; PORTB = 0x00; // For debugging
 	DDRC = 0xF0; PORTC = 0x0F; // Keyboard hybrid
 	DDRD = 0xFF; PORTD = 0x00; // USART output
    
 	ADC_init();
-	//initUSART(0);
+	initUSART(0);
 	initUSART(1);
 	LCD_init();
 	
